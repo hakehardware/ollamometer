@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Ollamometer{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Ollamometer</h1>
+            <p class="subtitle">LLM Hardware Benchmark Tool</p>
+        </div>
+    </header>
+
+    <nav style="background: var(--bg-secondary); border-bottom: 1px solid var(--border); margin-bottom: 20px;">
+        <div class="container" style="display: flex; gap: 20px; padding: 15px 0;">
+            <a href="/" style="color: var(--text-primary); text-decoration: none; padding: 8px 16px; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background='transparent'">Run Benchmark</a>
+            <a href="/compare" style="color: var(--text-primary); text-decoration: none; padding: 8px 16px; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background='transparent'">Compare Results</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Ollamometer | Hardware performance testing for LLMs</p>
+        </div>
+    </footer>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

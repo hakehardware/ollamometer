@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+
+{% block title %}Compare Benchmarks{% endblock %}
+
+{% block content %}
+<div class="results-container">
+    <h2>Compare Benchmark Results</h2>
+
+    <div class="section">
+        <h3>Upload Benchmark Files</h3>
+        <p class="description">Upload JSON files from different machines to compare performance side-by-side.</p>
+
+        <div style="margin-top: 15px;">
+            <input type="file" id="file-input" accept=".json" multiple style="display: none;">
+            <button onclick="document.getElementById('file-input').click()" class="btn-primary">
+                Select JSON Files
+            </button>
+            <button onclick="clearFiles()" class="btn-secondary" style="margin-left: 10px;">
+                Clear All
+            </button>
+        </div>
+
+        <div id="file-list" style="margin-top: 15px; display: none;">
+            <h4>Selected Files:</h4>
+            <ul id="uploaded-files" style="list-style: none; padding: 0;"></ul>
+        </div>
+
+        <div style="margin-top: 15px;">
+            <button onclick="compareResults()" id="compare-btn" class="btn-primary" disabled>
+                Compare Results
+            </button>
+        </div>
+    </div>
+
+    <div id="comparison-results" style="display: none;">
+        <div class="section">
+            <h3>System Comparison</h3>
+            <div id="systems-table"></div>
+        </div>
+
+        <div class="section">
+            <h3>Performance Comparison</h3>
+
+            <div style="margin-bottom: 15px;">
+                <label for="metric-select" style="margin-right: 10px; font-weight: 600;">Metric:</label>
+                <select id="metric-select" onchange="updateComparisonTable()" style="padding: 8px; border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border);">
+                    <option value="speed">Speed (tok/s)</option>
+                    <option value="ttft">Time to First Token (s)</option>
+                    <option value="total_duration">Total Duration (s)</option>
+                </select>
+
+                <label for="model-select" style="margin-left: 20px; margin-right: 10px; font-weight: 600;">Model:</label>
+                <select id="model-select" onchange="updateComparisonTable()" style="padding: 8px; border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border);">
+                </select>
+
+                <label for="prompt-select" style="margin-left: 20px; margin-right: 10px; font-weight: 600;">Prompt:</label>
+                <select id="prompt-select" onchange="updateComparisonTable()" style="padding: 8px; border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border);">
+                </select>
+            </div>
+
+            <div id="comparison-table"></div>
+        </div>
+
+        <div class="section">
+            <button onclick="window.location.href='/'" class="btn-primary">Run New Benchmark</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let uploadedData = [];
+
+// Handle file selection
+document.getElementById('file-input').addEventListener('change', function(e) {
+    const files = Array.from(e.target.files);
+
+    files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            try {
+                const data = JSON.parse(event.target.result);
+
+                // Validate structure
+                if (!data.system_info || !data.statistics) {
+                    alert(`Invalid file format: ${file.name}`);
+                    return;
+                }
+
+                uploadedData.push({
+                    filename: file.name,
+                    data: data
+                });
+
+                updateFileList();
+
+            } catch (err) {
+                alert(`Error parsing ${file.name}: ${err.message}`);
+            }
+        };
+        reader.readAsText(file);
+    });
+});
+
+function updateFileList() {
+    const fileList = document.getElementById('file-list');
+    const fileListUl = document.getElementById('uploaded-files');
+    const compareBtn = document.getElementById('compare-btn');
+
+    if (uploadedData.length === 0) {
+        fileList.style.display = 'none';
+        compareBtn.disabled = true;
+        return;
+    }
+
+    fileList.style.display = 'block';
+    compareBtn.disabled = false;
+
+    fileListUl.innerHTML = '';
+    uploadedData.forEach((item, index) => {
+        const li = document.createElement('li');
+        li.style.cssText = 'padding: 10px; margin: 5px 0; background: var(--bg-tertiary); border-radius: 4px; display: flex; justify-content: space-between; align-items: center;';
+
+        const name = item.data.system_info.name || 'Unknown';
+        const cpu = item.data.system_info.cpu_model || 'Unknown';
+        const gpu = item.data.system_info.gpu_model || 'Unknown';
+
+        li.innerHTML = `
+            <div>
+                <strong>${name}</strong> - ${cpu} | ${gpu}
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 5px;">
+                    ${item.filename}
+                </div>
+            </div>
+            <button onclick="removeFile(${index})" class="btn-secondary" style="padding: 5px 10px;">Remove</button>
+        `;
+        fileListUl.appendChild(li);
+    });
+}
+
+function removeFile(index) {
+    uploadedData.splice(index, 1);
+    updateFileList();
+}
+
+function clearFiles() {
+    uploadedData = [];
+    document.getElementById('file-input').value = '';
+    updateFileList();
+    document.getElementById('comparison-results').style.display = 'none';
+}
+
+function compareResults() {
+    if (uploadedData.length < 2) {
+        alert('Please upload at least 2 files to compare');
+        return;
+    }
+
+    // Show comparison results
+    document.getElementById('comparison-results').style.display = 'block';
+
+    // Build systems table
+    buildSystemsTable();
+
+    // Populate dropdowns
+    populateDropdowns();
+
+    // Build comparison table
+    updateComparisonTable();
+
+    // Scroll to results
+    document.getElementById('comparison-results').scrollIntoView({ behavior: 'smooth' });
+}
+
+function buildSystemsTable() {
+    const container = document.getElementById('systems-table');
+
+    let html = '<table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">';
+    html += '<thead><tr style="background: var(--bg-tertiary); text-align: left;">';
+    html += '<th style="padding: 10px; border: 1px solid var(--border);">System</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border);">CPU</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border);">Cores</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border);">RAM (GB)</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border);">GPU</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border);">VRAM (GB)</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border);">OS</th>';
+    html += '</tr></thead><tbody>';
+
+    uploadedData.forEach(item => {
+        const sys = item.data.system_info;
+        html += '<tr style="border-bottom: 1px solid var(--border);">';
+        html += `<td style="padding: 10px; border: 1px solid var(--border); font-weight: 600;">${sys.name || 'Unknown'}</td>`;
+        html += `<td style="padding: 10px; border: 1px solid var(--border);">${sys.cpu_model || 'Unknown'}</td>`;
+        html += `<td style="padding: 10px; border: 1px solid var(--border); text-align: center;">${sys.cpu_cores || 0}</td>`;
+        html += `<td style="padding: 10px; border: 1px solid var(--border); text-align: right;">${sys.ram_gb || 0}</td>`;
+        html += `<td style="padding: 10px; border: 1px solid var(--border);">${sys.gpu_model || 'Unknown'}</td>`;
+        html += `<td style="padding: 10px; border: 1px solid var(--border); text-align: right;">${sys.gpu_vram_gb || 0}</td>`;
+        html += `<td style="padding: 10px; border: 1px solid var(--border);">${sys.os_name || ''} ${sys.os_version || ''}</td>`;
+        html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function populateDropdowns() {
+    // Get all unique models and prompts
+    const allModels = new Set();
+    const allPrompts = new Set();
+
+    uploadedData.forEach(item => {
+        item.data.statistics.forEach(stat => {
+            allModels.add(stat.model);
+            allPrompts.add(stat.prompt_id);
+        });
+    });
+
+    // Populate model dropdown
+    const modelSelect = document.getElementById('model-select');
+    modelSelect.innerHTML = '';
+    Array.from(allModels).sort().forEach(model => {
+        const option = document.createElement('option');
+        option.value = model;
+        option.textContent = model;
+        modelSelect.appendChild(option);
+    });
+
+    // Populate prompt dropdown
+    const promptSelect = document.getElementById('prompt-select');
+    promptSelect.innerHTML = '';
+    Array.from(allPrompts).sort().forEach(prompt => {
+        const option = document.createElement('option');
+        option.value = prompt;
+        option.textContent = prompt;
+        promptSelect.appendChild(option);
+    });
+}
+
+function updateComparisonTable() {
+    const metric = document.getElementById('metric-select').value;
+    const model = document.getElementById('model-select').value;
+    const prompt = document.getElementById('prompt-select').value;
+    const container = document.getElementById('comparison-table');
+
+    // Collect data for this model/prompt combination
+    const comparisonData = [];
+
+    uploadedData.forEach(item => {
+        const stat = item.data.statistics.find(s => s.model === model && s.prompt_id === prompt);
+        if (stat) {
+            comparisonData.push({
+                name: item.data.system_info.name,
+                stat: stat,
+                systemInfo: item.data.system_info
+            });
+        }
+    });
+
+    if (comparisonData.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary);">No data available for this combination</p>';
+        return;
+    }
+
+    // Find best/worst performers
+    const values = comparisonData.map(d => d.stat[metric].avg);
+    const bestValue = metric === 'speed' ? Math.max(...values) : Math.min(...values);
+    const worstValue = metric === 'speed' ? Math.min(...values) : Math.max(...values);
+
+    // Build table
+    let html = '<table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">';
+    html += '<thead><tr style="background: var(--bg-tertiary); text-align: left;">';
+    html += '<th style="padding: 10px; border: 1px solid var(--border);">System</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border);">GPU</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border); text-align: center;">Runs</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border); text-align: right;">Average</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border); text-align: right;">Min</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border); text-align: right;">Max</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border); text-align: right;">Stdev</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border); text-align: center;">Rank</th>';
+    html += '</tr></thead><tbody>';
+
+    // Sort by average (best first)
+    comparisonData.sort((a, b) => {
+        if (metric === 'speed') {
+            return b.stat[metric].avg - a.stat[metric].avg; // Higher is better
+        } else {
+            return a.stat[metric].avg - b.stat[metric].avg; // Lower is better
+        }
+    });
+
+    comparisonData.forEach((item, index) => {
+        const metricData = item.stat[metric];
+        const isBest = metricData.avg === bestValue;
+        const isWorst = metricData.avg === worstValue;
+
+        html += '<tr style="border-bottom: 1px solid var(--border);">';
+        html += `<td style="padding: 10px; border: 1px solid var(--border); font-weight: 600;">${item.name}</td>`;
+        html += `<td style="padding: 10px; border: 1px solid var(--border);">${item.systemInfo.gpu_model || 'Unknown'}</td>`;
+        html += `<td style="padding: 10px; border: 1px solid var(--border); text-align: center;">${item.stat.num_runs}</td>`;
+        html += `<td style="padding: 10px; border: 1px solid var(--border); text-align: right; font-weight: 600; ${isBest ? 'color: var(--success);' : ''} ${isWorst ? 'color: var(--error);' : ''}">${metricData.avg.toFixed(metric === 'ttft' ? 3 : 2)}</td>`;
+        html += `<td style="padding: 10px; border: 1px solid var(--border); text-align: right;">${metricData.min.toFixed(metric === 'ttft' ? 3 : 2)}</td>`;
+        html += `<td style="padding: 10px; border: 1px solid var(--border); text-align: right;">${metricData.max.toFixed(metric === 'ttft' ? 3 : 2)}</td>`;
+        html += `<td style="padding: 10px; border: 1px solid var(--border); text-align: right;">${metricData.stdev.toFixed(metric === 'ttft' ? 3 : 2)}</td>`;
+        html += `<td style="padding: 10px; border: 1px solid var(--border); text-align: center; font-size: 1.2rem;">${index === 0 ? '🌟' : index === comparisonData.length - 1 ? '🐌' : (index + 1)}</td>`;
+        html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+</script>
+{% endblock %}

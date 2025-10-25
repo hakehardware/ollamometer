@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}Benchmark in Progress{% endblock %}
+
+{% block content %}
+<div class="progress-container">
+    <h2>Benchmark in Progress</h2>
+
+    <div class="progress-bar">
+        <div id="progress-fill" class="progress-fill"></div>
+    </div>
+    <p id="progress-percent" class="progress-text">0%</p>
+
+    <div style="margin: 20px 0; text-align: center;">
+        <button id="cancel-btn" onclick="cancelBenchmark()" class="btn-secondary" style="background: var(--error); color: white; padding: 10px 20px;">
+            Cancel Benchmark
+        </button>
+    </div>
+
+    <div id="current-status" class="status-box">
+        <p id="status-message">Initializing...</p>
+        <p id="status-current-test" style="color: var(--accent); font-size: 1rem; margin-top: 10px; font-weight: 600;"></p>
+        <p id="status-test-count" style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 5px;"></p>
+
+        <div id="prompt-details" style="display: none; margin-top: 15px; padding: 15px; background: var(--bg-tertiary); border-radius: 6px; border-left: 3px solid var(--accent);">
+            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 5px; font-weight: 600;">Current Prompt:</p>
+            <p id="prompt-text" style="color: var(--text-primary); font-size: 0.9rem; font-style: italic; line-height: 1.5;"></p>
+        </div>
+    </div>
+
+    <div id="progress-log" class="log-container" style="display: none;"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Cancel benchmark function
+function cancelBenchmark() {
+    if (!confirm('Are you sure you want to cancel the benchmark? All progress will be lost.')) {
+        return;
+    }
+
+    const cancelBtn = document.getElementById('cancel-btn');
+    cancelBtn.disabled = true;
+    cancelBtn.textContent = 'Cancelling...';
+
+    fetch('/api/benchmark/cancel', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Cancellation response:', data);
+    })
+    .catch(error => {
+        console.error('Error cancelling benchmark:', error);
+        alert('Failed to cancel benchmark');
+        cancelBtn.disabled = false;
+        cancelBtn.textContent = 'Cancel Benchmark';
+    });
+}
+
+// Real-time progress updates via SSE
+document.addEventListener('DOMContentLoaded', function() {
+    const progressFill = document.getElementById('progress-fill');
+    const progressPercent = document.getElementById('progress-percent');
+    const statusMessage = document.getElementById('status-message');
+    const statusCurrentTest = document.getElementById('status-current-test');
+    const statusTestCount = document.getElementById('status-test-count');
+
+    // Connect to SSE endpoint
+    const eventSource = new EventSource('/api/progress');
+
+    eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log('Progress update:', data);
+
+        if (data.status === 'idle') {
+            statusMessage.textContent = 'No operation running';
+            return;
+        }
+
+        // Update status message
+        statusMessage.textContent = data.message || 'Processing...';
+
+        // Update progress bar
+        if (data.progress !== undefined) {
+            const percent = Math.round(data.progress * 100);
+            progressFill.style.width = percent + '%';
+            progressPercent.textContent = percent + '%';
+        }
+
+        // Show current test details
+        if (data.current_item) {
+            statusCurrentTest.textContent = data.current_item;
+        }
+
+        // Show completion/total count
+        if (data.completed !== undefined && data.total !== undefined) {
+            statusTestCount.textContent = `Test ${data.completed} of ${data.total}`;
+        }
+
+        // Show prompt details if available
+        const promptDetails = document.getElementById('prompt-details');
+        const promptText = document.getElementById('prompt-text');
+        if (data.metadata && data.metadata.prompt_text) {
+            promptText.textContent = data.metadata.prompt_text;
+            promptDetails.style.display = 'block';
+        } else {
+            promptDetails.style.display = 'none';
+        }
+
+        // Handle completion
+        if (data.status === 'complete') {
+            progressFill.style.width = '100%';
+            progressPercent.textContent = '100%';
+            statusMessage.textContent = data.message || 'Complete!';
+
+            // Redirect to results after a delay
+            setTimeout(() => {
+                window.location.href = '/results';
+            }, 2000);
+        }
+
+        // Handle cancellation
+        if (data.status === 'cancelled') {
+            statusMessage.textContent = data.message || 'Benchmark cancelled';
+            statusMessage.style.color = 'var(--error)';
+
+            // Hide cancel button
+            const cancelBtn = document.getElementById('cancel-btn');
+            cancelBtn.style.display = 'none';
+
+            // Redirect to home after a delay
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 2000);
+
+            // Close SSE connection
+            eventSource.close();
+        }
+
+        // Handle errors
+        if (data.status === 'error') {
+            statusMessage.textContent = 'Error: ' + (data.error || data.message);
+            statusMessage.style.color = 'var(--error)';
+
+            // Close SSE connection
+            eventSource.close();
+        }
+    };
+
+    eventSource.onerror = (error) => {
+        console.error('SSE error:', error);
+        statusMessage.textContent = 'Connection lost. Refresh to retry.';
+        statusMessage.style.color = 'var(--error)';
+        eventSource.close();
+    };
+});
+</script>
+{% endblock %}

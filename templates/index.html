@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}Ollamometer - Home{% endblock %}
+
+{% block content %}
+<div class="benchmark-setup">
+    <div class="section">
+        <h2>Select Models to Test</h2>
+        <div id="models-loading" class="loading">Loading models...</div>
+        <div id="models-container" class="model-list" style="display: none;"></div>
+        <div id="ollama-error" class="error" style="display: none;">
+            WARNING: Cannot connect to Ollama. Make sure Ollama is running with <code>ollama serve</code>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Select Benchmark Prompts</h2>
+        <p class="description">Different prompts test different hardware characteristics</p>
+        <div class="prompt-list">
+            {% for prompt in prompts %}
+            <div class="prompt-item">
+                <input type="checkbox"
+                       id="prompt-{{ prompt.id }}"
+                       value="{{ prompt.id }}"
+                       checked>
+                <label for="prompt-{{ prompt.id }}">
+                    <span class="prompt-icon">{{ prompt.icon }}</span>
+                    <span class="prompt-name">{{ prompt.name }}</span>
+                    <span class="prompt-desc">{{ prompt.description }}</span>
+                </label>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="prompt-controls">
+            <button onclick="selectAllPrompts()" class="btn-secondary">Select All</button>
+            <button onclick="deselectAllPrompts()" class="btn-secondary">Deselect All</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Configuration</h2>
+        <div class="config-row">
+            <label for="runs-per-test">Runs per model/prompt:</label>
+            <select id="runs-per-test">
+                {% for runs in runs_options %}
+                <option value="{{ runs }}" {% if runs == default_runs %}selected{% endif %}>{{ runs }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="total-tests">
+            <strong>Total tests:</strong> <span id="total-tests">0</span>
+        </div>
+    </div>
+
+    <div class="section">
+        <button id="start-btn" onclick="startBenchmark()" class="btn-primary" disabled>
+            Start Benchmark
+        </button>
+        <p id="start-warning" class="warning" style="display: none;"></p>
+    </div>
+</div>
+
+<!-- Progress Modal -->
+<div id="progress-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <h2 id="modal-title">Downloading Models</h2>
+        <div class="progress-info">
+            <p id="modal-status" class="status-text">Preparing...</p>
+            <div class="progress-bar">
+                <div id="modal-progress-fill" class="progress-fill" style="width: 0%;"></div>
+            </div>
+            <p id="modal-details" class="details-text"></p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script>
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    loadModels();
+    updateTotalTests();
+
+    // Add change listeners
+    document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        checkbox.addEventListener('change', updateTotalTests);
+    });
+    document.getElementById('runs-per-test').addEventListener('change', updateTotalTests);
+});
+
+function selectAllPrompts() {
+    document.querySelectorAll('.prompt-item input[type="checkbox"]').forEach(cb => {
+        cb.checked = true;
+    });
+    updateTotalTests();
+}
+
+function deselectAllPrompts() {
+    document.querySelectorAll('.prompt-item input[type="checkbox"]').forEach(cb => {
+        cb.checked = false;
+    });
+    updateTotalTests();
+}
+
+function updateTotalTests() {
+    const models = document.querySelectorAll('.model-item input[type="checkbox"]:checked').length;
+    const prompts = document.querySelectorAll('.prompt-item input[type="checkbox"]:checked').length;
+    const runs = parseInt(document.getElementById('runs-per-test').value);
+
+    const total = models * prompts * runs;
+    document.getElementById('total-tests').textContent = total;
+
+    // Enable/disable start button
+    const startBtn = document.getElementById('start-btn');
+    const warning = document.getElementById('start-warning');
+
+    if (models === 0 || prompts === 0) {
+        startBtn.disabled = true;
+        warning.style.display = 'block';
+        warning.textContent = 'Please select at least one model and one prompt';
+    } else {
+        startBtn.disabled = false;
+        warning.style.display = 'none';
+    }
+}
+</script>
+{% endblock %}

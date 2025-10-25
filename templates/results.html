@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+
+{% block title %}Benchmark Results{% endblock %}
+
+{% block content %}
+<div class="results-container">
+    <h2>Benchmark Results</h2>
+
+    <div id="results-loading" class="loading" style="display: none;">Loading results...</div>
+    <div id="results-error" class="error" style="display: none;"></div>
+
+    <div id="results-content" style="display: none;">
+        <div class="section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div>
+                    <p id="results-summary" class="description"></p>
+                </div>
+                <button onclick="downloadJSON()" class="btn-secondary">Download JSON</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>System Information</h3>
+            <div id="system-info" style="background: var(--bg-tertiary); padding: 15px; border-radius: 6px; font-size: 0.9rem;"></div>
+        </div>
+
+        <div class="section">
+            <h3>Results by Model and Prompt</h3>
+            <div id="results-table"></div>
+        </div>
+
+        <div class="section">
+            <button onclick="window.location.href='/'" class="btn-primary">Run Another Benchmark</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let benchmarkResults = null;
+
+// Load results on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadResults();
+});
+
+async function loadResults() {
+    const loading = document.getElementById('results-loading');
+    const error = document.getElementById('results-error');
+    const content = document.getElementById('results-content');
+
+    loading.style.display = 'block';
+
+    try {
+        const response = await fetch('/api/results');
+
+        if (!response.ok) {
+            throw new Error('No results available');
+        }
+
+        const data = await response.json();
+        benchmarkResults = data;
+
+        // Hide loading, show content
+        loading.style.display = 'none';
+        content.style.display = 'block';
+
+        // Display results
+        displayResults(data);
+
+    } catch (err) {
+        console.error('Error loading results:', err);
+        loading.style.display = 'none';
+        error.style.display = 'block';
+        error.textContent = 'No results available. Please run a benchmark first.';
+    }
+}
+
+// Helper function to calculate statistics
+function calculateStats(values) {
+    if (values.length === 0) return { avg: 0, min: 0, max: 0, stdev: 0 };
+
+    const avg = values.reduce((sum, v) => sum + v, 0) / values.length;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+
+    // Calculate standard deviation
+    let stdev = 0;
+    if (values.length > 1) {
+        const variance = values.reduce((sum, v) => sum + Math.pow(v - avg, 2), 0) / values.length;
+        stdev = Math.sqrt(variance);
+    }
+
+    return { avg, min, max, stdev };
+}
+
+// Store aggregated results for export
+let aggregatedResults = null;
+
+function displayResults(data) {
+    const summary = document.getElementById('results-summary');
+    const systemInfoContainer = document.getElementById('system-info');
+    const tableContainer = document.getElementById('results-table');
+
+    // Show summary
+    const totalTests = data.total_tests;
+    const uniqueModels = [...new Set(data.results.map(r => r.model))].length;
+    const uniquePrompts = [...new Set(data.results.map(r => r.prompt_id))].length;
+
+    summary.textContent = `Completed ${totalTests} tests across ${uniqueModels} models and ${uniquePrompts} prompts`;
+
+    // Display system info
+    if (data.system_info) {
+        const sysInfo = data.system_info;
+        let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">';
+
+        // Name
+        html += '<div><strong>Name:</strong> ' + (sysInfo.name || 'Unknown') + '</div>';
+
+        // CPU
+        html += '<div><strong>CPU:</strong> ' + (sysInfo.cpu_model || 'Unknown') + ' (' + (sysInfo.cpu_cores || 0) + ' cores)</div>';
+
+        // RAM
+        html += '<div><strong>RAM:</strong> ' + (sysInfo.ram_gb || 0) + ' GB</div>';
+
+        // GPU
+        const gpuText = sysInfo.gpu_model || 'CPU-only';
+        const vramText = sysInfo.gpu_vram_gb > 0 ? ' (' + sysInfo.gpu_vram_gb + ' GB VRAM)' : '';
+        html += '<div><strong>GPU:</strong> ' + gpuText + vramText + '</div>';
+
+        // OS
+        html += '<div><strong>OS:</strong> ' + (sysInfo.os_name || 'Unknown') + ' ' + (sysInfo.os_version || '') + '</div>';
+
+        // Architecture
+        html += '<div><strong>Architecture:</strong> ' + (sysInfo.cpu_arch || 'Unknown') + '</div>';
+
+        html += '</div>';
+        systemInfoContainer.innerHTML = html;
+    }
+
+    // Group results by model and prompt
+    const grouped = {};
+    data.results.forEach(result => {
+        const key = `${result.model}|||${result.prompt_id}`;
+        if (!grouped[key]) {
+            grouped[key] = {
+                model: result.model,
+                prompt_id: result.prompt_id,
+                runs: []
+            };
+        }
+        grouped[key].runs.push(result);
+    });
+
+    // Calculate statistics for each metric
+    const aggregated = Object.values(grouped).map(group => {
+        const runs = group.runs;
+
+        // Extract values for each metric
+        const tokens_per_sec_values = runs.map(r => r.tokens_per_second);
+        const ttft_values = runs.map(r => r.time_to_first_token_s);
+        const total_duration_values = runs.map(r => r.total_duration_s);
+
+        // Calculate statistics
+        const speed_stats = calculateStats(tokens_per_sec_values);
+        const ttft_stats = calculateStats(ttft_values);
+        const duration_stats = calculateStats(total_duration_values);
+
+        // Memory metrics (should be same across all runs, just take first)
+        const model_size_mb = runs[0].model_size_mb || 0;
+        const model_size_vram_mb = runs[0].model_size_vram_mb || 0;
+        const compute_mode = runs[0].compute_mode || 'Unknown';
+
+        return {
+            model: group.model,
+            prompt_id: group.prompt_id,
+            num_runs: runs.length,
+            speed_stats: speed_stats,
+            ttft_stats: ttft_stats,
+            duration_stats: duration_stats,
+            model_size_mb: model_size_mb,
+            model_size_vram_mb: model_size_vram_mb,
+            compute_mode: compute_mode,
+            runs: runs
+        };
+    });
+
+    // Build results table
+    let html = '<table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">';
+    html += '<thead><tr style="background: var(--bg-tertiary); text-align: left;">';
+    html += '<th style="padding: 10px; border: 1px solid var(--border);">Model</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border);">Prompt</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border); text-align: center;">Runs</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border); text-align: right;">Speed<br/>(tok/s)</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border); text-align: right;">TTFT<br/>(s)</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border); text-align: right;">Total<br/>(s)</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border); text-align: right;">RAM<br/>(MB)</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border); text-align: right;">VRAM<br/>(MB)</th>';
+    html += '<th style="padding: 10px; border: 1px solid var(--border); text-align: center;">Compute<br/>Mode</th>';
+    html += '</tr></thead><tbody>';
+
+    aggregated.forEach(row => {
+        html += '<tr style="border-bottom: 1px solid var(--border);">';
+        html += `<td style="padding: 10px; border: 1px solid var(--border); font-weight: 600;">${row.model}</td>`;
+        html += `<td style="padding: 10px; border: 1px solid var(--border);">${row.prompt_id}</td>`;
+        html += `<td style="padding: 10px; border: 1px solid var(--border); text-align: center;">${row.num_runs}</td>`;
+
+        // Speed with statistics
+        const speedAvg = row.speed_stats.avg.toFixed(2);
+        const speedStdev = row.speed_stats.stdev.toFixed(2);
+        const speedMin = row.speed_stats.min.toFixed(2);
+        const speedMax = row.speed_stats.max.toFixed(2);
+        html += `<td style="padding: 10px; border: 1px solid var(--border); text-align: right; color: var(--accent); font-weight: 600;">`;
+        html += `<div>${speedAvg} ±${speedStdev}</div>`;
+        html += `<div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 400;">${speedMin} - ${speedMax}</div>`;
+        html += `</td>`;
+
+        // TTFT with statistics
+        const ttftAvg = row.ttft_stats.avg.toFixed(3);
+        const ttftStdev = row.ttft_stats.stdev.toFixed(3);
+        const ttftMin = row.ttft_stats.min.toFixed(3);
+        const ttftMax = row.ttft_stats.max.toFixed(3);
+        html += `<td style="padding: 10px; border: 1px solid var(--border); text-align: right;">`;
+        html += `<div>${ttftAvg} ±${ttftStdev}</div>`;
+        html += `<div style="font-size: 0.75rem; color: var(--text-secondary);">${ttftMin} - ${ttftMax}</div>`;
+        html += `</td>`;
+
+        // Total duration with statistics
+        const durationAvg = row.duration_stats.avg.toFixed(2);
+        const durationStdev = row.duration_stats.stdev.toFixed(2);
+        const durationMin = row.duration_stats.min.toFixed(2);
+        const durationMax = row.duration_stats.max.toFixed(2);
+        html += `<td style="padding: 10px; border: 1px solid var(--border); text-align: right;">`;
+        html += `<div>${durationAvg} ±${durationStdev}</div>`;
+        html += `<div style="font-size: 0.75rem; color: var(--text-secondary);">${durationMin} - ${durationMax}</div>`;
+        html += `</td>`;
+
+        html += `<td style="padding: 10px; border: 1px solid var(--border); text-align: right;">${row.model_size_mb.toFixed(0)}</td>`;
+        html += `<td style="padding: 10px; border: 1px solid var(--border); text-align: right; color: var(--warning); font-weight: 600;">${row.model_size_vram_mb.toFixed(0)}</td>`;
+        html += `<td style="padding: 10px; border: 1px solid var(--border); text-align: center; font-size: 0.85rem;">${row.compute_mode}</td>`;
+        html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    tableContainer.innerHTML = html;
+
+    // Store aggregated results for JSON export
+    aggregatedResults = aggregated;
+}
+
+function downloadJSON() {
+    if (!benchmarkResults) {
+        alert('No results to download');
+        return;
+    }
+
+    // Enhanced export with statistics
+    const exportData = {
+        system_info: benchmarkResults.system_info,
+        timestamp: new Date().toISOString(),
+        total_tests: benchmarkResults.total_tests,
+
+        // Raw individual run results
+        raw_results: benchmarkResults.results,
+
+        // Aggregated statistics
+        statistics: aggregatedResults ? aggregatedResults.map(row => ({
+            model: row.model,
+            prompt_id: row.prompt_id,
+            num_runs: row.num_runs,
+            speed: {
+                avg: parseFloat(row.speed_stats.avg.toFixed(2)),
+                min: parseFloat(row.speed_stats.min.toFixed(2)),
+                max: parseFloat(row.speed_stats.max.toFixed(2)),
+                stdev: parseFloat(row.speed_stats.stdev.toFixed(2))
+            },
+            ttft: {
+                avg: parseFloat(row.ttft_stats.avg.toFixed(3)),
+                min: parseFloat(row.ttft_stats.min.toFixed(3)),
+                max: parseFloat(row.ttft_stats.max.toFixed(3)),
+                stdev: parseFloat(row.ttft_stats.stdev.toFixed(3))
+            },
+            total_duration: {
+                avg: parseFloat(row.duration_stats.avg.toFixed(2)),
+                min: parseFloat(row.duration_stats.min.toFixed(2)),
+                max: parseFloat(row.duration_stats.max.toFixed(2)),
+                stdev: parseFloat(row.duration_stats.stdev.toFixed(2))
+            },
+            memory: {
+                ram_mb: row.model_size_mb,
+                vram_mb: row.model_size_vram_mb,
+                compute_mode: row.compute_mode
+            }
+        })) : []
+    };
+
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ollama_benchmark_${new Date().toISOString()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+</script>
+{% endblock %}
