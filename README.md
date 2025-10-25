@@ -26,26 +26,42 @@ A web-based benchmarking tool for measuring LLM performance across different har
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/yourusername/ollamometer.git
+git clone https://github.com/hakehardware/ollamometer.git
 cd ollamometer
 ```
 
-2. Install dependencies:
+2. Create and activate a virtual environment:
+
+**Linux/macOS:**
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+**Windows:**
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Configure your system (edit `config.py`):
+4. Configure your system (edit `config.py`):
    - Set `OLLAMA_BASE_URL` if Ollama is on a different machine
    - Update `SYSTEM_INFO` with your hardware specifications
    - Customize `AVAILABLE_MODELS` if desired
 
-4. Run the application:
+5. Run the application:
 ```bash
 python ollamometer.py
 ```
 
-5. Open your browser to `http://localhost:5555`
+6. Open your browser to `http://localhost:5555`
+
+**Note**: To deactivate the virtual environment when done, simply run `deactivate`.
 
 ## Configuration
 
