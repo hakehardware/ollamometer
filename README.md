@@ -30,7 +30,12 @@ git clone https://github.com/hakehardware/ollamometer.git
 cd ollamometer
 ```
 
-2. Create and activate a virtual environment:
+2. Create your configuration file:
+```bash
+cp config.py.example config.py
+```
+
+3. Create and activate a virtual environment:
 
 **Linux/macOS:**
 ```bash
@@ -64,26 +69,28 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 powershell -ExecutionPolicy Bypass -File venv\Scripts\Activate.ps1
 ```
 
-3. Install dependencies:
+4. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Configure your system (edit `config.py`):
+5. Configure your system (edit `config.py`):
    - Set `OLLAMA_BASE_URL` if Ollama is on a different machine
    - Update `SYSTEM_INFO` with your hardware specifications
    - Customize `AVAILABLE_MODELS` if desired
 
-5. Run the application:
+6. Run the application:
 ```bash
 python ollamometer.py
 ```
 
-6. Open your browser to `http://localhost:5555`
+7. Open your browser to `http://localhost:5555`
 
 **Note**: To deactivate the virtual environment when done, simply run `deactivate`.
 
 ## Configuration
+
+**Note**: Your `config.py` file is not tracked by git, so pulling updates won't overwrite your settings. After pulling updates, check `config.py.example` for any new configuration options.
 
 ### Ollama Server
 

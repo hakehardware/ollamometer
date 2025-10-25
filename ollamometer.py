@@ -11,6 +11,20 @@ Usage:
 Then visit: http://localhost:5555
 """
 
+import os
+import sys
+
+# Check if config.py exists
+if not os.path.exists('config.py'):
+    print("=" * 60)
+    print("ERROR: config.py not found!")
+    print("=" * 60)
+    print("\nPlease create your configuration file:")
+    print("  cp config.py.example config.py")
+    print("\nThen edit config.py with your system information.")
+    print("=" * 60)
+    sys.exit(1)
+
 from flask import Flask
 import config
 

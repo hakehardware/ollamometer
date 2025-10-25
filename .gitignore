@@ -3,6 +3,9 @@ knowledge-base/
 plan/
 .claude/
 
+# User configuration (create from config.py.example)
+config.py
+
 # Python
 __pycache__/
 *.py[cod]
