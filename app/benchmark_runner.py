@@ -147,6 +147,10 @@ class BenchmarkRunner:
                     self.results = []  # Clear partial results
                     return self.results
 
+                # Unload model once at the start for clean state
+                self.client.unload_model(model)
+                time.sleep(1)  # Give it a moment to unload
+
                 for prompt_idx, prompt_dict in enumerate(prompts):
                     # Check for cancellation
                     if progress_tracker.is_cancelled():
@@ -179,12 +183,7 @@ class BenchmarkRunner:
                             }
                         )
 
-                        # Unload model for clean state
-                        if run_num == 1:
-                            self.client.unload_model(model)
-                            time.sleep(1)  # Give it a moment to unload
-
-                        # Run inference
+                        # Run inference (model will auto-load on first inference)
                         result = self._run_single_test(
                             model=model,
                             prompt_id=prompt_id,
