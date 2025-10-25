@@ -7,7 +7,14 @@
     <div class="section">
         <h2>Select Models to Test</h2>
         <div id="models-loading" class="loading">Loading models...</div>
-        <div id="models-container" class="model-list" style="display: none;"></div>
+        <div id="models-container" style="display: none;">
+            <select id="models-select" multiple size="8" style="width: 100%; padding: 8px; font-family: 'Courier New', monospace; font-size: 0.95rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px;">
+            </select>
+            <div class="model-controls" style="margin-top: 10px;">
+                <button onclick="selectAllModels()" class="btn-secondary">Select All</button>
+                <button onclick="deselectAllModels()" class="btn-secondary">Deselect All</button>
+            </div>
+        </div>
         <div id="ollama-error" class="error" style="display: none;">
             WARNING: Cannot connect to Ollama. Make sure Ollama is running with <code>ollama serve</code>
         </div>
@@ -90,6 +97,22 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('runs-per-test').addEventListener('change', updateTotalTests);
 });
 
+function selectAllModels() {
+    const select = document.getElementById('models-select');
+    for (let i = 0; i < select.options.length; i++) {
+        select.options[i].selected = true;
+    }
+    updateTotalTests();
+}
+
+function deselectAllModels() {
+    const select = document.getElementById('models-select');
+    for (let i = 0; i < select.options.length; i++) {
+        select.options[i].selected = false;
+    }
+    updateTotalTests();
+}
+
 function selectAllPrompts() {
     document.querySelectorAll('.prompt-item input[type="checkbox"]').forEach(cb => {
         cb.checked = true;
@@ -105,7 +128,8 @@ function deselectAllPrompts() {
 }
 
 function updateTotalTests() {
-    const models = document.querySelectorAll('.model-item input[type="checkbox"]:checked').length;
+    const select = document.getElementById('models-select');
+    const models = select ? select.selectedOptions.length : 0;
     const prompts = document.querySelectorAll('.prompt-item input[type="checkbox"]:checked').length;
     const runs = parseInt(document.getElementById('runs-per-test').value);
 

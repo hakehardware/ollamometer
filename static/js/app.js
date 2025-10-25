@@ -30,38 +30,27 @@ async function loadModels() {
         loading.style.display = 'none';
         container.style.display = 'block';
 
-        // Render models
-        container.innerHTML = '';
+        // Render models in multi-select dropdown
+        const select = document.getElementById('models-select');
+        select.innerHTML = '';
+
         data.models.forEach(model => {
-            const modelDiv = document.createElement('div');
-            modelDiv.className = 'model-item';
+            const option = document.createElement('option');
+            option.value = model.name;
+            option.selected = model.downloaded; // Auto-select downloaded models
 
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.id = `model-${model.name}`;
-            checkbox.value = model.name;
-            checkbox.checked = model.downloaded; // Only check if downloaded
-            checkbox.addEventListener('change', updateTotalTests);
+            // Format: "model-name [Ready]" or "model-name [Need Pull]"
+            const badge = model.downloaded ? '[Ready]' : '[Need Pull]';
+            option.textContent = `${model.name} ${badge}`;
 
-            const label = document.createElement('label');
-            label.htmlFor = `model-${model.name}`;
+            // Store download status as data attribute
+            option.dataset.downloaded = model.downloaded;
 
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'model-name';
-            nameSpan.textContent = model.name;
-
-            const badge = document.createElement('span');
-            badge.className = model.downloaded ? 'badge ready' : 'badge needs-pull';
-            badge.textContent = model.downloaded ? 'Ready' : 'Need Pull';
-
-            label.appendChild(nameSpan);
-            label.appendChild(badge);
-
-            modelDiv.appendChild(checkbox);
-            modelDiv.appendChild(label);
-
-            container.appendChild(modelDiv);
+            select.appendChild(option);
         });
+
+        // Add change listener to select element
+        select.addEventListener('change', updateTotalTests);
 
         updateTotalTests();
 
@@ -78,10 +67,9 @@ let allModels = [];
 
 // Start benchmark process
 async function startBenchmark() {
-    // Get selected models
-    const selectedModels = Array.from(
-        document.querySelectorAll('.model-item input[type="checkbox"]:checked')
-    ).map(cb => cb.value);
+    // Get selected models from multi-select
+    const select = document.getElementById('models-select');
+    const selectedModels = Array.from(select.selectedOptions).map(option => option.value);
 
     // Get selected prompts
     const selectedPrompts = Array.from(
