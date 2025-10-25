@@ -38,10 +38,30 @@ python3 -m venv venv
 source venv/bin/activate
 ```
 
-**Windows:**
+**Windows (Command Prompt):**
 ```bash
 python -m venv venv
-venv\Scripts\activate
+venv\Scripts\activate.bat
+```
+
+**Windows (PowerShell):**
+```powershell
+python -m venv venv
+venv\Scripts\Activate.ps1
+```
+
+If you get a script execution error in PowerShell, use one of these solutions:
+
+**Option A**: Use Command Prompt instead of PowerShell (recommended for simplicity)
+
+**Option B**: Enable script execution in PowerShell (run as Administrator):
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+**Option C**: Bypass for this session only:
+```powershell
+powershell -ExecutionPolicy Bypass -File venv\Scripts\Activate.ps1
 ```
 
 3. Install dependencies:
