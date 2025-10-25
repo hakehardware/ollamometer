@@ -151,6 +151,15 @@ class BenchmarkRunner:
                 self.client.unload_model(model)
                 time.sleep(1)  # Give it a moment to unload
 
+                # Notify that model will be loading on first inference
+                progress_tracker.update(
+                    message=f"Preparing {model} - model will load on first test",
+                    current_item=model,
+                    completed=completed_tests,
+                    total=total_tests,
+                    metadata={'model': model, 'status': 'preparing'}
+                )
+
                 for prompt_idx, prompt_dict in enumerate(prompts):
                     # Check for cancellation
                     if progress_tracker.is_cancelled():
@@ -166,6 +175,16 @@ class BenchmarkRunner:
                         if progress_tracker.is_cancelled():
                             self.results = []  # Clear partial results
                             return self.results
+
+                        # Show loading message on first run of first prompt
+                        if prompt_idx == 0 and run_num == 1:
+                            progress_tracker.update(
+                                message=f"Loading {model} into memory...",
+                                current_item=f"{model} (Loading)",
+                                completed=completed_tests,
+                                total=total_tests,
+                                metadata={'model': model, 'status': 'loading'}
+                            )
 
                         # Update progress
                         current_item = f"{model} - {prompt_dict['name']} (Run {run_num}/{runs_per_test})"
