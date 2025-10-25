@@ -2,6 +2,10 @@
  * Ollamometer Frontend JavaScript
  */
 
+// Global variables
+let allModels = [];
+let selectedModelsData = [];
+
 // Load models from API and display them
 async function loadModels() {
     const container = document.getElementById('models-container');
@@ -30,28 +34,30 @@ async function loadModels() {
         loading.style.display = 'none';
         container.style.display = 'block';
 
-        // Render models in multi-select dropdown
-        const select = document.getElementById('models-select');
-        select.innerHTML = '';
+        // Populate available models dropdown
+        const availableSelect = document.getElementById('available-models-select');
+        availableSelect.innerHTML = '<option value="">-- Select a model --</option>';
+
+        // Initialize selected models array (auto-select downloaded models)
+        selectedModelsData = [];
 
         data.models.forEach(model => {
-            const option = document.createElement('option');
-            option.value = model.name;
-            option.selected = model.downloaded; // Auto-select downloaded models
-
-            // Format: "model-name [Ready]" or "model-name [Need Pull]"
-            const badge = model.downloaded ? '[Ready]' : '[Need Pull]';
-            option.textContent = `${model.name} ${badge}`;
-
-            // Store download status as data attribute
-            option.dataset.downloaded = model.downloaded;
-
-            select.appendChild(option);
+            if (model.downloaded) {
+                // Auto-add downloaded models to selected
+                selectedModelsData.push(model.name);
+            } else {
+                // Add non-downloaded models to available dropdown
+                const option = document.createElement('option');
+                option.value = model.name;
+                const badge = model.downloaded ? '[Ready]' : '[Need Pull]';
+                option.textContent = `${model.name} ${badge}`;
+                option.dataset.downloaded = model.downloaded;
+                availableSelect.appendChild(option);
+            }
         });
 
-        // Add change listener to select element
-        select.addEventListener('change', updateTotalTests);
-
+        // Render initial selected models
+        renderSelectedModels();
         updateTotalTests();
 
     } catch (err) {
@@ -62,14 +68,10 @@ async function loadModels() {
     }
 }
 
-// Global variable to store model info
-let allModels = [];
-
 // Start benchmark process
 async function startBenchmark() {
-    // Get selected models from multi-select
-    const select = document.getElementById('models-select');
-    const selectedModels = Array.from(select.selectedOptions).map(option => option.value);
+    // Get selected models from selectedModelsData array
+    const selectedModels = selectedModelsData;
 
     // Get selected prompts
     const selectedPrompts = Array.from(

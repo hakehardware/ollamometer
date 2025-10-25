@@ -403,6 +403,62 @@ code {
     min-height: 20px;
 }
 
+/* Model Selection Chips */
+.add-model-section {
+    margin-bottom: 15px;
+}
+
+#selected-models-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    min-height: 40px;
+}
+
+.model-chip {
+    display: inline-flex;
+    align-items: center;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+}
+
+.model-chip:hover {
+    background: var(--bg-secondary);
+    border-color: var(--accent);
+}
+
+.model-chip-name {
+    margin-right: 8px;
+}
+
+.model-chip-remove {
+    background: var(--error);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.2rem;
+    line-height: 1;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+.model-chip-remove:hover {
+    background: #d32f2f;
+    transform: scale(1.1);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     header h1 {

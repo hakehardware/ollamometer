@@ -8,11 +8,17 @@
         <h2>Select Models to Test</h2>
         <div id="models-loading" class="loading">Loading models...</div>
         <div id="models-container" style="display: none;">
-            <select id="models-select" multiple size="8" style="width: 100%; padding: 8px; font-family: 'Courier New', monospace; font-size: 0.95rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px;">
-            </select>
-            <div class="model-controls" style="margin-top: 10px;">
-                <button onclick="selectAllModels()" class="btn-secondary">Select All</button>
-                <button onclick="deselectAllModels()" class="btn-secondary">Deselect All</button>
+            <!-- Add Model Button and Dropdown -->
+            <div class="add-model-section">
+                <button id="add-model-btn" onclick="toggleModelDropdown()" class="btn-secondary">+ Add Model</button>
+                <select id="available-models-select" style="display: none; width: 100%; margin-top: 10px; padding: 8px; font-family: 'Courier New', monospace; font-size: 0.95rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px;">
+                    <option value="">-- Select a model --</option>
+                </select>
+            </div>
+
+            <!-- Selected Models List -->
+            <div id="selected-models-list" style="margin-top: 15px;">
+                <!-- Selected models will be added here as chips -->
             </div>
         </div>
         <div id="ollama-error" class="error" style="display: none;">
@@ -97,20 +103,98 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('runs-per-test').addEventListener('change', updateTotalTests);
 });
 
-function selectAllModels() {
-    const select = document.getElementById('models-select');
-    for (let i = 0; i < select.options.length; i++) {
-        select.options[i].selected = true;
+function toggleModelDropdown() {
+    const dropdown = document.getElementById('available-models-select');
+    if (dropdown.style.display === 'none') {
+        dropdown.style.display = 'block';
+        // Add change listener to add selected model
+        dropdown.onchange = function() {
+            if (this.value) {
+                addSelectedModel(this.value);
+                this.value = ''; // Reset selection
+            }
+        };
+    } else {
+        dropdown.style.display = 'none';
     }
+}
+
+function addSelectedModel(modelName) {
+    // Add to selected models array
+    selectedModelsData.push(modelName);
+
+    // Remove from available dropdown
+    const dropdown = document.getElementById('available-models-select');
+    for (let i = 0; i < dropdown.options.length; i++) {
+        if (dropdown.options[i].value === modelName) {
+            dropdown.remove(i);
+            break;
+        }
+    }
+
+    // Hide dropdown if empty
+    if (dropdown.options.length === 0) {
+        dropdown.style.display = 'none';
+    }
+
+    // Render selected models
+    renderSelectedModels();
     updateTotalTests();
 }
 
-function deselectAllModels() {
-    const select = document.getElementById('models-select');
-    for (let i = 0; i < select.options.length; i++) {
-        select.options[i].selected = false;
+function removeSelectedModel(modelName) {
+    // Remove from selected models array
+    selectedModelsData = selectedModelsData.filter(m => m !== modelName);
+
+    // Add back to available dropdown
+    const modelInfo = allModels.find(m => m.name === modelName);
+    if (modelInfo) {
+        const dropdown = document.getElementById('available-models-select');
+        const option = document.createElement('option');
+        option.value = modelInfo.name;
+        const badge = modelInfo.downloaded ? '[Ready]' : '[Need Pull]';
+        option.textContent = `${modelInfo.name} ${badge}`;
+        option.dataset.downloaded = modelInfo.downloaded;
+        dropdown.appendChild(option);
+
+        // Sort options alphabetically (skip first placeholder option)
+        const placeholder = dropdown.options[0];
+        const sortedOptions = Array.from(dropdown.options)
+            .slice(1) // Skip placeholder
+            .sort((a, b) => a.value.localeCompare(b.value));
+
+        dropdown.innerHTML = '';
+        dropdown.appendChild(placeholder);
+        sortedOptions.forEach(option => dropdown.appendChild(option));
     }
+
+    // Render selected models
+    renderSelectedModels();
     updateTotalTests();
+}
+
+function renderSelectedModels() {
+    const container = document.getElementById('selected-models-list');
+    container.innerHTML = '';
+
+    if (selectedModelsData.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary); font-style: italic;">No models selected. Click "Add Model" to select models for testing.</p>';
+        return;
+    }
+
+    selectedModelsData.forEach(modelName => {
+        const modelInfo = allModels.find(m => m.name === modelName);
+        if (modelInfo) {
+            const chip = document.createElement('div');
+            chip.className = 'model-chip';
+            const badge = modelInfo.downloaded ? '[Ready]' : '[Need Pull]';
+            chip.innerHTML = `
+                <span class="model-chip-name">${modelInfo.name} ${badge}</span>
+                <button class="model-chip-remove" onclick="removeSelectedModel('${modelInfo.name}')" title="Remove model">×</button>
+            `;
+            container.appendChild(chip);
+        }
+    });
 }
 
 function selectAllPrompts() {
@@ -128,8 +212,7 @@ function deselectAllPrompts() {
 }
 
 function updateTotalTests() {
-    const select = document.getElementById('models-select');
-    const models = select ? select.selectedOptions.length : 0;
+    const models = selectedModelsData.length;
     const prompts = document.querySelectorAll('.prompt-item input[type="checkbox"]:checked').length;
     const runs = parseInt(document.getElementById('runs-per-test').value);
 
